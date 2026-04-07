@@ -2820,8 +2820,7 @@ const overallWeeklyPercent =
                                                   <div
                                                     onMouseDown={(e) => startLongPress(unit.id, task.id, e)}
                                                     onTouchStart={(e) => startLongPress(unit.id, task.id, e)}
-                                                    onMouseUp={endLongPress}
-                                                    onTouchEnd={endLongPress}
+                                                
                                                     onMouseEnter={() => {
                                                       if (isActiveDrag && draggingTaskId && draggingTaskId !== task.id) {
                                                         setHoveredTargetTaskId(task.id);
