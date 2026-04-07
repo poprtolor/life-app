@@ -24,3 +24,47 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes learning-unit-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.learning-unit-in {
+  animation: learning-unit-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes learning-node-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(251, 146, 60, 0.4),
+      0 0 40px rgba(251, 146, 60, 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 0 12px rgba(251, 146, 60, 0),
+      0 0 56px rgba(251, 146, 60, 0.35);
+  }
+}
+
+.learning-node-pulse {
+  animation: learning-node-pulse 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .learning-unit-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .learning-node-pulse {
+    animation: none;
+  }
+}
