@@ -969,10 +969,141 @@ const [gymCurrentMonth, setGymCurrentMonth] = useState(new Date().getMonth());
 const [gymCurrentYear, setGymCurrentYear] = useState(new Date().getFullYear());
 const [hasLoadedData, setHasLoadedData] = useState(false);
 
+const addSchoolAssignment = () => {
+  if (!selectedSchoolSubjectId || !newAssignmentTitle.trim() || !newAssignmentDue) return;
+
+  const newAssignment: SchoolAssignment = {
+    id: `sa-${Date.now()}`,
+    title: newAssignmentTitle.trim(),
+    dueDate: newAssignmentDue,
+    completed: false,
+    priority: newAssignmentPriority,
+    type: newAssignmentType,
+    subjectId: selectedSchoolSubjectId,
+  };
+
+  setSchoolData((prev) => ({
+    ...prev,
+    assignments: [newAssignment, ...prev.assignments],
+  }));
+
+  setNewAssignmentTitle("");
+  setNewAssignmentDue("");
+  setNewAssignmentPriority("medium");
+  setNewAssignmentType("homework");
+};
+
+const addSchoolExam = () => {
+  if (!selectedSchoolSubjectId || !newExamTitle.trim() || !newExamDate) return;
+
+  const newExam: SchoolExam = {
+    id: `se-${Date.now()}`,
+    title: newExamTitle.trim(),
+    date: newExamDate,
+    subjectId: selectedSchoolSubjectId,
+    status: "upcoming",
+    notes: newExamNotes.trim(),
+  };
+
+  setSchoolData((prev) => ({
+    ...prev,
+    exams: [newExam, ...prev.exams],
+  }));
+
+  setNewExamTitle("");
+  setNewExamDate("");
+  setNewExamNotes("");
+};
+
+const toggleAssignmentCompleted = (assignmentId: string) => {
+  setSchoolData((prev) => ({
+    ...prev,
+    assignments: prev.assignments.map((a) =>
+      a.id === assignmentId ? { ...a, completed: !a.completed } : a
+    ),
+  }));
+};
+
+const deleteSchoolAssignment = (assignmentId: string) => {
+  setSchoolData((prev) => ({
+    ...prev,
+    assignments: prev.assignments.filter((a) => a.id !== assignmentId),
+  }));
+};
+
+const deleteSchoolExam = (examId: string) => {
+  setSchoolData((prev) => ({
+    ...prev,
+    exams: prev.exams.filter((e) => e.id !== examId),
+  }));
+};
 
 
-  
 
+
+
+
+
+
+
+
+const today = new Date();
+today.setHours(12, 0, 0, 0);
+
+const schoolEndDate = new Date(today.getFullYear(), 5, 20); // 20 ביוני
+schoolEndDate.setHours(12, 0, 0, 0);
+
+const msPerDay = 1000 * 60 * 60 * 24;
+
+const grossDaysLeft = Math.max(
+  0,
+  Math.ceil((schoolEndDate.getTime() - today.getTime()) / msPerDay)
+);
+
+const netDaysLeft = useMemo(() => {
+  let count = 0;
+  const cursor = new Date(today);
+
+  while (cursor <= schoolEndDate) {
+    const day = cursor.getDay(); // 0=Sunday, 6=Saturday
+    if (day !== 5 && day !== 6) {
+      count++;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return Math.max(0, count - 1);
+}, [today.getTime(), schoolEndDate.getTime()]);
+
+const schoolTimelineDays = useMemo(() => {
+  const days: Array<{
+    key: string;
+    label: string;
+    isPassed: boolean;
+    isToday: boolean;
+    isWeekend: boolean;
+  }> = [];
+
+  const cursor = new Date(today);
+  cursor.setHours(12, 0, 0, 0);
+
+  while (cursor <= schoolEndDate) {
+    const key = dateKeyFromDate(cursor);
+    const day = cursor.getDay();
+
+    days.push({
+      key,
+      label: `${cursor.getDate()}/${cursor.getMonth() + 1}`,
+      isPassed: cursor.getTime() < today.getTime(),
+      isToday: cursor.toDateString() === today.toDateString(),
+      isWeekend: day === 5 || day === 6,
+    });
+
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return days;
+}, [today.getTime(), schoolEndDate.getTime()]);
   // School Data State
   const [schoolData, setSchoolData] = useState<SchoolData>({
     subjects: [],
@@ -3606,7 +3737,7 @@ const overallWeeklyPercent =
                             {subjectTabBtn("schedule", "לו״ז משולב", CalendarDays)}
                             {subjectTabBtn("homework", "שיעורי בית", ClipboardList)}
                             {subjectTabBtn("exams", "מבחנים", CalendarIcon)}
-                            {subjectTabBtn("notes", "נושאים והערות", BookMarked)}
+                            {subjectTabBtn("notes", "עד 20 ביוני", BookMarked)}
                           </div>
 
                           {schoolSubjectTab === "schedule" && (
@@ -3692,326 +3823,228 @@ const overallWeeklyPercent =
                             </div>
                           )}
 
-                          {schoolSubjectTab === "homework" && (
-                            <div className="space-y-6">
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <h4 className="text-lg font-bold text-white">שיעורי בית ומטלות</h4>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (!newAssignmentTitle.trim() || !newAssignmentDue) return;
-                                    const newAssignment: SchoolAssignment = {
-                                      id: `a${Date.now()}`,
-                                      title: newAssignmentTitle.trim(),
-                                      dueDate: newAssignmentDue,
-                                      completed: false,
-                                      priority: newAssignmentPriority,
-                                      type: newAssignmentType,
-                                      subjectId: subject.id,
-                                    };
-                                    setSchoolData((prev) => ({
-                                      ...prev,
-                                      assignments: [...prev.assignments, newAssignment],
-                                    }));
-                                    setNewAssignmentTitle("");
-                                    setNewAssignmentDue("");
-                                    setNewAssignmentPriority("medium");
-                                    setNewAssignmentType("homework");
-                                  }}
-                                  className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-orange-600"
-                                >
-                                  + הוסף מטלה
-                                </button>
-                              </div>
-                              <div className="space-y-2 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
-                                <input
-                                  type="text"
-                                  placeholder="שם המשימה..."
-                                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-orange-400"
-                                  value={newAssignmentTitle}
-                                  onChange={(e) => setNewAssignmentTitle(e.target.value)}
-                                />
-                                <div className="flex flex-wrap gap-2">
-                                  <input
-                                    type="date"
-                                    className="min-w-[10rem] flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white outline-none focus:border-orange-400"
-                                    value={newAssignmentDue}
-                                    onChange={(e) => setNewAssignmentDue(e.target.value)}
-                                  />
-                                  <select
-                                    className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white outline-none focus:border-orange-400"
-                                    value={newAssignmentPriority}
-                                    onChange={(e) =>
-                                      setNewAssignmentPriority(e.target.value as "low" | "medium" | "high")
-                                    }
-                                  >
-                                    <option value="low">עדיפות נמוכה</option>
-                                    <option value="medium">עדיפות בינונית</option>
-                                    <option value="high">עדיפות גבוהה</option>
-                                  </select>
-                                  <select
-                                    className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white outline-none focus:border-orange-400"
-                                    value={newAssignmentType}
-                                    onChange={(e) =>
-                                      setNewAssignmentType(
-                                        e.target.value as SchoolAssignment["type"]
-                                      )
-                                    }
-                                  >
-                                    <option value="homework">שיעורי בית</option>
-                                    <option value="reading">קריאה</option>
-                                    <option value="worksheet">דף עבודה</option>
-                                    <option value="project">פרויקט</option>
-                                    <option value="study">לימוד</option>
-                                  </select>
-                                </div>
-                              </div>
-                              <div className="space-y-2">
-                                {subjectAssignments.length === 0 ? (
-                                  <p className="py-8 text-center text-zinc-500">אין משימות במקצוע הזה</p>
-                                ) : (
-                                  [...subjectAssignments]
-                                    .sort((a, b) => schoolDayTime(a.dueDate) - schoolDayTime(b.dueDate))
-                                    .map((assignment) => (
-                                      <div
-                                        key={assignment.id}
-                                        className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 transition-colors hover:bg-zinc-900/70"
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={assignment.completed}
-                                          onChange={() => {
-                                            setSchoolData((prev) => ({
-                                              ...prev,
-                                              assignments: prev.assignments.map((a) =>
-                                                a.id === assignment.id
-                                                  ? { ...a, completed: !a.completed }
-                                                  : a
-                                              ),
-                                            }));
-                                          }}
-                                          className="h-5 w-5 cursor-pointer rounded"
-                                        />
-                                        <div className="min-w-0 flex-1">
-                                          <div
-                                            className={
-                                              assignment.completed
-                                                ? "text-zinc-500 line-through"
-                                                : "font-medium text-white"
-                                            }
-                                          >
-                                            {assignment.title}
-                                          </div>
-                                          <div className="mt-0.5 text-xs text-zinc-500">
-                                            {new Date(assignment.dueDate + "T12:00:00").toLocaleDateString(
-                                              "he-IL"
-                                            )}{" "}
-                                            • {SCHOOL_ASSIGNMENT_TYPE_HE[assignment.type]}
-                                          </div>
-                                        </div>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setSchoolData((prev) => ({
-                                              ...prev,
-                                              assignments: prev.assignments.filter(
-                                                (a) => a.id !== assignment.id
-                                              ),
-                                            }));
-                                          }}
-                                          className="text-zinc-500 hover:text-red-400"
-                                        >
-                                          <Trash2 size={16} />
-                                        </button>
-                                      </div>
-                                    ))
-                                )}
-                              </div>
-                            </div>
-                          )}
+                         {schoolSubjectTab === "homework" && (
+  <div className="space-y-4">
+    <div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-5 space-y-3">
+      <h4 className="text-lg font-bold text-white">הוסף שיעורי בית</h4>
 
-                          {schoolSubjectTab === "exams" && (
-                            <div className="space-y-6">
-                              <h4 className="text-lg font-bold text-white">מבחנים במקצוע</h4>
-                              <div className="space-y-2 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
-                                <input
-                                  type="text"
-                                  placeholder="שם המבחן..."
-                                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-blue-500"
-                                  value={newExamTitle}
-                                  onChange={(e) => setNewExamTitle(e.target.value)}
-                                />
-                                <input
-                                  type="date"
-                                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                                  value={newExamDate}
-                                  onChange={(e) => setNewExamDate(e.target.value)}
-                                />
-                                <textarea
-                                  placeholder="חומר ללימוד, נושאים, הערות..."
-                                  className="h-24 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-blue-500"
-                                  value={newExamNotes}
-                                  onChange={(e) => setNewExamNotes(e.target.value)}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (!newExamTitle.trim() || !newExamDate) return;
-                                    setSchoolData((prev) => ({
-                                      ...prev,
-                                      exams: [
-                                        ...prev.exams,
-                                        {
-                                          id: `e${Date.now()}`,
-                                          title: newExamTitle.trim(),
-                                          date: newExamDate,
-                                          subjectId: subject.id,
-                                          status: "upcoming",
-                                          notes: newExamNotes.trim(),
-                                        },
-                                      ],
-                                    }));
-                                    setNewExamTitle("");
-                                    setNewExamDate("");
-                                    setNewExamNotes("");
-                                  }}
-                                  className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-500"
-                                >
-                                  הוסף מבחן
-                                </button>
-                              </div>
-                              <div className="space-y-2">
-                                {subjectExams.length === 0 ? (
-                                  <p className="py-8 text-center text-zinc-500">אין מבחנים רשומים</p>
-                                ) : (
-                                  subjectExams.map((exam) => {
-                                    const days = Math.round(
-                                      (schoolDayTime(exam.date) - schoolDayTime(todayKey)) / 86400000
-                                    );
-                                    return (
-                                      <div
-                                        key={exam.id}
-                                        className="rounded-xl border border-blue-500/25 bg-blue-950/20 p-4"
-                                      >
-                                        <div className="flex items-start justify-between gap-3">
-                                          <div className="min-w-0">
-                                            <div className="font-bold text-white">{exam.title}</div>
-                                            <div className="mt-1 text-sm text-zinc-400">
-                                              {new Date(exam.date + "T12:00:00").toLocaleDateString("he-IL", {
-                                                weekday: "long",
-                                                day: "numeric",
-                                                month: "long",
-                                                year: "numeric",
-                                              })}{" "}
-                                              •{" "}
-                                              {days === 0
-                                                ? "היום"
-                                                : days > 0
-                                                  ? `בעוד ${days} ימים`
-                                                  : `עבר לפני ${Math.abs(days)} ימים`}
-                                            </div>
-                                            {exam.notes && (
-                                              <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-                                                {exam.notes}
-                                              </p>
-                                            )}
-                                          </div>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setSchoolData((prev) => ({
-                                                ...prev,
-                                                exams: prev.exams.filter((e) => e.id !== exam.id),
-                                              }));
-                                            }}
-                                            className="shrink-0 text-zinc-500 hover:text-red-400"
-                                          >
-                                            <Trash2 size={16} />
-                                          </button>
-                                        </div>
-                                      </div>
-                                    );
-                                  })
-                                )}
-                              </div>
-                            </div>
-                          )}
+      <input
+        type="text"
+        placeholder="שם המשימה"
+        value={newAssignmentTitle}
+        onChange={(e) => setNewAssignmentTitle(e.target.value)}
+        className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500"
+      />
 
-                          {schoolSubjectTab === "notes" && (
-                            <div className="space-y-6">
-                              <h4 className="text-lg font-bold text-white">נושאים, חומר והערות</h4>
-                              <div className="space-y-2 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
-                                <input
-                                  type="text"
-                                  placeholder="כותרת (למשל נושא השבוע)..."
-                                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-orange-400"
-                                  value={newNoteTitle}
-                                  onChange={(e) => setNewNoteTitle(e.target.value)}
-                                />
-                                <textarea
-                                  placeholder="תוכן — נוסחאות, נושאים, קישורים..."
-                                  className="h-28 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-orange-400"
-                                  value={newNoteContent}
-                                  onChange={(e) => setNewNoteContent(e.target.value)}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (!newNoteTitle.trim() || !newNoteContent.trim()) return;
-                                    const newNote: SchoolNote = {
-                                      id: `n${Date.now()}`,
-                                      title: newNoteTitle.trim(),
-                                      content: newNoteContent.trim(),
-                                      subjectId: subject.id,
-                                      createdAt: new Date().toISOString(),
-                                    };
-                                    setSchoolData((prev) => ({
-                                      ...prev,
-                                      notes: [...prev.notes, newNote],
-                                    }));
-                                    setNewNoteTitle("");
-                                    setNewNoteContent("");
-                                  }}
-                                  className="w-full rounded-xl bg-orange-500 py-2.5 text-sm font-bold text-white hover:bg-orange-600"
-                                >
-                                  שמור
-                                </button>
-                              </div>
-                              <div className="space-y-3">
-                                {subjectNotes.length === 0 ? (
-                                  <p className="py-8 text-center text-zinc-500">אין הערות עדיין</p>
-                                ) : (
-                                  subjectNotes.map((note) => (
-                                    <div
-                                      key={note.id}
-                                      className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4"
-                                    >
-                                      <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0 flex-1">
-                                          <div className="font-bold text-white">{note.title}</div>
-                                          <div className="mt-2 whitespace-pre-wrap text-sm text-zinc-400">
-                                            {note.content}
-                                          </div>
-                                        </div>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setSchoolData((prev) => ({
-                                              ...prev,
-                                              notes: prev.notes.filter((n) => n.id !== note.id),
-                                            }));
-                                          }}
-                                          className="shrink-0 text-zinc-500 hover:text-red-400"
-                                        >
-                                          <Trash2 size={16} />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                            </div>
-                          )}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <input
+          type="date"
+          value={newAssignmentDue}
+          onChange={(e) => setNewAssignmentDue(e.target.value)}
+          className="rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500"
+        />
+
+        <select
+          value={newAssignmentType}
+          onChange={(e) => setNewAssignmentType(e.target.value as SchoolAssignment["type"])}
+          className="rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500"
+        >
+          <option value="homework">שיעורי בית</option>
+          <option value="reading">קריאה</option>
+          <option value="worksheet">דף עבודה</option>
+          <option value="project">פרויקט</option>
+          <option value="study">לימוד</option>
+        </select>
+
+        <select
+          value={newAssignmentPriority}
+          onChange={(e) => setNewAssignmentPriority(e.target.value as "low" | "medium" | "high")}
+          className="rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500"
+        >
+          <option value="low">עדיפות נמוכה</option>
+          <option value="medium">עדיפות בינונית</option>
+          <option value="high">עדיפות גבוהה</option>
+        </select>
+      </div>
+
+      <button
+        onClick={addSchoolAssignment}
+        className="rounded-2xl bg-blue-500 px-5 py-3 font-bold text-white hover:bg-blue-600 transition-colors"
+        type="button"
+      >
+        הוסף שיעורי בית
+      </button>
+    </div>
+
+    <div className="space-y-3">
+      {schoolData.assignments
+        .filter((a) => a.subjectId === selectedSchoolSubjectId)
+        .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+        .map((a) => (
+          <div
+            key={a.id}
+            className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 flex items-center justify-between gap-4"
+          >
+            <div>
+              <div className={`font-bold ${a.completed ? "line-through text-zinc-500" : "text-white"}`}>
+                {a.title}
+              </div>
+              <div className="text-sm text-zinc-500">
+                {SCHOOL_ASSIGNMENT_TYPE_HE[a.type]} · להגשה עד {a.dueDate}
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => toggleAssignmentCompleted(a.id)}
+                className="rounded-xl bg-emerald-500/20 px-3 py-2 text-emerald-300 hover:bg-emerald-500/30"
+                type="button"
+              >
+                {a.completed ? "בטל סימון" : "בוצע"}
+              </button>
+
+              <button
+                onClick={() => deleteSchoolAssignment(a.id)}
+                className="rounded-xl bg-red-500/20 px-3 py-2 text-red-300 hover:bg-red-500/30"
+                type="button"
+              >
+                מחק
+              </button>
+            </div>
+          </div>
+        ))}
+    </div>
+  </div>
+)}
+
+                       {schoolSubjectTab === "exams" && (
+  <div className="space-y-4">
+    <div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-5 space-y-3">
+      <h4 className="text-lg font-bold text-white">הוסף מבחן</h4>
+
+      <input
+        type="text"
+        placeholder="שם המבחן"
+        value={newExamTitle}
+        onChange={(e) => setNewExamTitle(e.target.value)}
+        className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500"
+      />
+
+      <input
+        type="date"
+        value={newExamDate}
+        onChange={(e) => setNewExamDate(e.target.value)}
+        className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500"
+      />
+
+      <textarea
+        placeholder="הערות למבחן"
+        value={newExamNotes}
+        onChange={(e) => setNewExamNotes(e.target.value)}
+        className="w-full min-h-[100px] rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500"
+      />
+
+      <button
+        onClick={addSchoolExam}
+        className="rounded-2xl bg-blue-500 px-5 py-3 font-bold text-white hover:bg-blue-600 transition-colors"
+        type="button"
+      >
+        הוסף מבחן
+      </button>
+    </div>
+
+    <div className="space-y-3">
+      {schoolData.exams
+        .filter((e) => e.subjectId === selectedSchoolSubjectId)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((exam) => (
+          <div
+            key={exam.id}
+            className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 flex items-center justify-between gap-4"
+          >
+            <div>
+              <div className="font-bold text-white">{exam.title}</div>
+              <div className="text-sm text-zinc-500">מבחן בתאריך {exam.date}</div>
+              {exam.notes && <div className="text-sm text-zinc-400 mt-1">{exam.notes}</div>}
+            </div>
+
+            <button
+              onClick={() => deleteSchoolExam(exam.id)}
+              className="rounded-xl bg-red-500/20 px-3 py-2 text-red-300 hover:bg-red-500/30"
+              type="button"
+            >
+              מחק
+            </button>
+          </div>
+        ))}
+    </div>
+  </div>
+)}
+
+           {schoolSubjectTab === "notes" && (
+  <div className="space-y-6">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-5">
+        <p className="text-sm text-zinc-500 mb-2">ימים ברוטו עד 20 ביוני</p>
+        <div className="text-3xl font-black text-white">{grossDaysLeft}</div>
+      </div>
+
+      <div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-5">
+        <p className="text-sm text-zinc-500 mb-2">ימים נטו ללימודים</p>
+        <div className="text-3xl font-black text-white">{netDaysLeft}</div>
+      </div>
+
+      <div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-5">
+        <p className="text-sm text-zinc-500 mb-2">תאריך סיום</p>
+        <div className="text-2xl font-black text-white">20/6</div>
+      </div>
+    </div>
+
+    <div className="rounded-[28px] border border-zinc-800 bg-zinc-950/60 p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <h4 className="text-xl font-black text-white">לוח זמנים עד סוף השנה</h4>
+        <span className="text-xs text-zinc-500">כל יום שעובר מסומן אוטומטית</span>
+      </div>
+
+      <div className="grid grid-cols-4 md:grid-cols-7 lg:grid-cols-10 gap-3">
+        {schoolTimelineDays.map((day) => (
+          <div
+            key={day.key}
+            className={`relative rounded-2xl border p-3 text-center transition-all overflow-hidden ${
+              day.isToday
+                ? "border-blue-500 bg-blue-500/10 text-blue-300"
+                : day.isPassed
+                ? "border-zinc-700 bg-zinc-900 text-zinc-500"
+                : day.isWeekend
+                ? "border-zinc-800 bg-zinc-950/70 text-zinc-700"
+                : "border-zinc-800 bg-zinc-950 text-white"
+            }`}
+          >
+            {(day.isPassed || day.isToday) && (
+              <div className="pointer-events-none absolute inset-0">
+                <div className="absolute top-1/2 left-[-10%] w-[120%] h-[2px] bg-zinc-300/70 rotate-[-12deg]" />
+                <div className="absolute top-1/2 left-[-10%] w-[120%] h-[2px] bg-zinc-400/30 rotate-[12deg]" />
+              </div>
+            )}
+
+            <div className="relative z-10">
+              <div className="text-xs font-bold">{day.label}</div>
+              <div className="mt-1 text-[10px]">
+                {day.isToday
+                  ? "היום"
+                  : day.isWeekend
+                  ? "סופ״ש"
+                  : day.isPassed
+                  ? "עבר"
+                  : "נותר"}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+)}
                         </div>
                       </div>
                     );
