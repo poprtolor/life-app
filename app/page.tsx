@@ -34,7 +34,7 @@ Dumbbell,
 } from "lucide-react";
 
 // --- Types ---
-type PageKey = "habits" | "gym" | "university" | "school";
+type PageKey = "home" | "habits" | "gym" | "university" | "school";
 type HabitDayStatus = "done" | "missed" | "none";
 
 type GymWorkoutDayStatus = "done" | "missed" | "none";
@@ -925,7 +925,7 @@ const DEMO_USER_ID = "ronen-local-001";
 
 // --- Main Component ---
 export default function Home() {
-  const [activePage, setActivePage] = useState<PageKey>("habits");
+  const [activePage, setActivePage] = useState<PageKey>("home");
   const [selectedHabitId, setSelectedHabitId] = useState<number | null>(1);
   const [habits, setHabits] = useState<Habit[]>(initialHabits);
   const [newHabitName, setNewHabitName] = useState("");
@@ -1907,6 +1907,12 @@ const overallWeeklyPercent =
           </div>
 
           <nav className="space-y-1">
+            <NavItem
+              icon={<LayoutDashboard size={18} />}
+              label="דף הבית"
+              active={activePage === "home"}
+              onClick={() => setActivePage("home")}
+            />
             <NavItem
               icon={<CheckCircle2 size={18} />}
               label="הרגלים"
