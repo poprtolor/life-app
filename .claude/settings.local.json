@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs ls *)",
+      "Bash(grep -E \"^\\(arrow-left|clock|coffee|brain|users|more-horizontal|filter|circle|zap|sun|moon\\)\\\\.js$\")",
+      "Bash(grep -E \"^\\(check|check-circle-2|x-circle|list-checks|layout-dashboard|home\\)\\\\.js$\")",
+      "Bash(npx tsc *)",
+      "Bash(grep -E \"^\\(graduation-cap|copy|alert-circle|calendar-days|file-text|clipboard-list|book-marked|rotate-ccw|history|sparkles|trophy|bell\\)\\\\.js$\")"
+    ]
+  }
+}

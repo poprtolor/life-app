@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { supabase } from "./lib/supabase";
 import {
   CheckCircle2,
@@ -236,8 +237,37 @@ type SchoolData = {
   notes: SchoolNote[];
 };
 
+type SchoolCountdown = {
+  /** YYYY-MM-DD -> user marked "day passed" */
+  markedPassedDays: Record<string, boolean>;
+  /** Dates with no school (holidays, breaks), YYYY-MM-DD */
+  noSchoolDays: string[];
+};
+
 function schoolDayTime(isoDate: string): number {
   return new Date(isoDate + "T12:00:00").getTime();
+}
+
+function isoTodayKey(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+function isoKeyFromDate(d: Date): string {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0).toISOString().split("T")[0];
+}
+
+function addDaysKey(iso: string, add: number): string {
+  const dt = new Date(iso + "T12:00:00");
+  dt.setDate(dt.getDate() + add);
+  return isoKeyFromDate(dt);
+}
+
+function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1, 12, 0, 0);
+}
+
+function endOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 12, 0, 0);
 }
 
 type SchoolAgendaRow =
@@ -298,6 +328,7 @@ function NavItem({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${
         active
@@ -336,6 +367,235 @@ function QuickStat({
       </div>
       <span className="text-sm font-black text-white">{value}</span>
     </div>
+  );
+}
+
+function ChalkTally({ count }: { count: number }) {
+  const blocks = Math.floor(count / 5);
+  const rem = count % 5;
+  const groupClass = "relative h-4 w-8";
+  const lineClass = "absolute top-0 bottom-0 w-[2px] rounded-full bg-zinc-200/90";
+  return (
+    <div className="flex items-center gap-2">
+      {Array.from({ length: blocks }).map((_, i) => (
+        <div key={`b-${i}`} className={groupClass}>
+          <span className={`${lineClass} left-1`} />
+          <span className={`${lineClass} left-3`} />
+          <span className={`${lineClass} left-5`} />
+          <span className={`${lineClass} left-7`} />
+          <span className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 rotate-[-18deg] rounded-full bg-zinc-200/90" />
+        </div>
+      ))}
+      {rem > 0 && (
+        <div className={groupClass}>
+          {rem >= 1 && <span className={`${lineClass} left-1`} />}
+          {rem >= 2 && <span className={`${lineClass} left-3`} />}
+          {rem >= 3 && <span className={`${lineClass} left-5`} />}
+          {rem >= 4 && <span className={`${lineClass} left-7`} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SchoolCountdownPanel({
+  today,
+  endDate,
+  value,
+  onChange,
+  grossDaysLeft,
+  netDaysLeft,
+}: {
+  today: Date;
+  endDate: Date;
+  value: SchoolCountdown;
+  onChange: (next: SchoolCountdown) => void;
+  grossDaysLeft: number;
+  netDaysLeft: number;
+}) {
+  const [viewMonth, setViewMonth] = useState(() => startOfMonth(today));
+  const [newNoSchoolDay, setNewNoSchoolDay] = useState("");
+
+  const monthStart = startOfMonth(viewMonth);
+  const monthEnd = endOfMonth(viewMonth);
+  const rangeStartKey = isoKeyFromDate(today);
+  const rangeEndKey = isoKeyFromDate(endDate);
+
+  const firstDow = monthStart.getDay(); // 0 Sun
+  const gridStart = new Date(monthStart);
+  gridStart.setDate(gridStart.getDate() - firstDow);
+
+  const canPrev = startOfMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1)) >= startOfMonth(today);
+  const canNext = startOfMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1)) <= startOfMonth(endDate);
+
+  const noSchool = new Set(value.noSchoolDays);
+
+  const togglePassed = (key: string) => {
+    const isOn = !!value.markedPassedDays[key];
+    onChange({
+      ...value,
+      markedPassedDays: { ...value.markedPassedDays, [key]: !isOn },
+    });
+  };
+
+  const addNoSchool = () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newNoSchoolDay)) return;
+    onChange({
+      ...value,
+      noSchoolDays: Array.from(new Set([...value.noSchoolDays, newNoSchoolDay])).sort(),
+    });
+    setNewNoSchoolDay("");
+  };
+
+  const removeNoSchool = (key: string) => {
+    onChange({ ...value, noSchoolDays: value.noSchoolDays.filter((d) => d !== key) });
+  };
+
+  return (
+    <aside className="rounded-3xl border border-zinc-800 bg-zinc-950/55 p-5 shadow-[0_0_40px_rgba(0,0,0,0.35)]">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-black uppercase tracking-widest text-zinc-500">עד 20 ביוני</div>
+          <div className="mt-1 text-lg font-black text-white">לוח שנה + סימון ימים</div>
+        </div>
+        <div className="text-right">
+          <div className="text-[11px] text-zinc-500">נותר</div>
+          <div className="text-base font-black text-white tabular-nums">{grossDaysLeft} ימים</div>
+        </div>
+      </div>
+
+      <div className="mb-4 grid grid-cols-2 gap-3">
+        <div className="rounded-2xl border border-zinc-800 bg-black/25 p-3">
+          <div className="text-[11px] font-bold text-zinc-500">ברוטו</div>
+          <div className="mt-1 text-xl font-black text-white tabular-nums">{grossDaysLeft}</div>
+        </div>
+        <div className="rounded-2xl border border-zinc-800 bg-black/25 p-3">
+          <div className="text-[11px] font-bold text-zinc-500">נטו לימודים</div>
+          <div className="mt-1 text-xl font-black text-white tabular-nums">{netDaysLeft}</div>
+        </div>
+      </div>
+
+      <div className="mb-3 flex items-center justify-between">
+        <button
+          type="button"
+          disabled={!canPrev}
+          onClick={() => setViewMonth((m) => startOfMonth(new Date(m.getFullYear(), m.getMonth() - 1, 1)))}
+          className={`rounded-xl border px-3 py-2 text-xs font-black transition-colors ${
+            canPrev ? "border-zinc-800 bg-black/25 text-zinc-200 hover:bg-zinc-900/60" : "border-zinc-900 bg-black/10 text-zinc-700"
+          }`}
+        >
+          חודש קודם
+        </button>
+        <div className="text-sm font-black text-white">
+          {monthStart.toLocaleDateString("he-IL", { month: "long", year: "numeric" })}
+        </div>
+        <button
+          type="button"
+          disabled={!canNext}
+          onClick={() => setViewMonth((m) => startOfMonth(new Date(m.getFullYear(), m.getMonth() + 1, 1)))}
+          className={`rounded-xl border px-3 py-2 text-xs font-black transition-colors ${
+            canNext ? "border-zinc-800 bg-black/25 text-zinc-200 hover:bg-zinc-900/60" : "border-zinc-900 bg-black/10 text-zinc-700"
+          }`}
+        >
+          חודש הבא
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 text-[10px] font-bold text-zinc-600 mb-2">
+        {["א", "ב", "ג", "ד", "ה", "ו", "ש"].map((d) => (
+          <div key={d} className="text-center">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-1">
+        {Array.from({ length: 42 }).map((_, idx) => {
+          const d = new Date(gridStart);
+          d.setDate(d.getDate() + idx);
+          d.setHours(12, 0, 0, 0);
+          const key = dateKeyFromDate(d);
+
+          const inMonth = d >= monthStart && d <= monthEnd;
+          const inRange = key >= rangeStartKey && key <= rangeEndKey;
+          const dayOfWeek = d.getDay();
+          const isWeekend = dayOfWeek === 5 || dayOfWeek === 6;
+          const isNoSchool = noSchool.has(key);
+          const isToday = key === rangeStartKey;
+          const isMarked = !!value.markedPassedDays[key];
+
+          const disabled = !inMonth || !inRange;
+          const canToggle = !disabled && key <= rangeStartKey;
+
+          return (
+            <button
+              key={key}
+              type="button"
+              disabled={!canToggle}
+              onClick={() => togglePassed(key)}
+              className={[
+                "relative h-12 rounded-xl border transition-colors overflow-hidden",
+                disabled
+                  ? "border-transparent bg-transparent"
+                  : isToday
+                    ? "border-blue-500 bg-blue-500/10"
+                    : isNoSchool
+                      ? "border-amber-500/30 bg-amber-500/10"
+                      : isWeekend
+                        ? "border-zinc-800 bg-zinc-950/70"
+                        : "border-zinc-800 bg-black/25 hover:bg-zinc-900/50",
+                canToggle ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+              ].join(" ")}
+              title={key}
+            >
+              <div className="absolute top-1 left-1 text-[10px] font-black text-zinc-300">{d.getDate()}</div>
+              {isMarked && (
+                <div className="absolute inset-0 grid place-items-center">
+                  <ChalkTally count={5} />
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-zinc-800 bg-black/25 p-4">
+        <div className="mb-2 text-xs font-black uppercase tracking-widest text-zinc-600">ימים בלי לימודים</div>
+        <div className="flex gap-2">
+          <input
+            type="date"
+            value={newNoSchoolDay}
+            onChange={(e) => setNewNoSchoolDay(e.target.value)}
+            className="flex-1 rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-sm text-white outline-none focus:border-amber-500/60"
+          />
+          <button
+            type="button"
+            onClick={addNoSchool}
+            className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-black text-amber-950 hover:bg-amber-400 transition-colors"
+          >
+            הוסף
+          </button>
+        </div>
+        {value.noSchoolDays.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {value.noSchoolDays.map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => removeNoSchool(d)}
+                className="rounded-full border border-zinc-700 bg-zinc-950/40 px-3 py-1 text-[11px] font-bold text-zinc-300 hover:border-amber-500/40"
+                title="לחץ להסרה"
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="mt-3 text-[11px] text-zinc-600">
+          נטו מחושב כימים בלי שישי/שבת ובלי התאריכים כאן.
+        </p>
+      </div>
+    </aside>
   );
 }
 
@@ -929,6 +1189,94 @@ export default function Home() {
   const [selectedHabitId, setSelectedHabitId] = useState<number | null>(1);
   const [habits, setHabits] = useState<Habit[]>(initialHabits);
   const [newHabitName, setNewHabitName] = useState("");
+  const homeGoals = useMemo(
+    () => ({
+      university: [
+        {
+          title: "Finish the semester strong",
+          why: "Consistency + practice exams + weekly reviews.",
+          progress: 42,
+          accent: "from-sky-500/25 to-indigo-500/20",
+          bar: "bg-sky-400",
+          plan: [
+            { label: "Map syllabus + outcomes", weeks: 1 },
+            { label: "Weekly deep-work blocks", weeks: 2 },
+            { label: "Practice exams + review", weeks: 3 },
+            { label: "Final sprint plan", weeks: 2 },
+          ],
+        },
+      ],
+      school: [
+        {
+          title: "Raise math grade",
+          why: "Small daily practice beats cramming.",
+          progress: 30,
+          accent: "from-emerald-500/25 to-lime-500/20",
+          bar: "bg-emerald-400",
+          plan: [
+            { label: "Diagnose weak topics", weeks: 1 },
+            { label: "Daily 25-min practice", weeks: 2 },
+            { label: "Past papers routine", weeks: 2 },
+            { label: "Error log + fixes", weeks: 1 },
+          ],
+        },
+        {
+          title: "Improve English speaking",
+          why: "Practice small routines consistently.",
+          progress: 55,
+          accent: "from-amber-500/25 to-orange-500/20",
+          bar: "bg-amber-400",
+          plan: [
+            { label: "Daily shadowing", weeks: 1 },
+            { label: "Weekly speaking prompts", weeks: 2 },
+            { label: "Record + self review", weeks: 1 },
+            { label: "Mini presentation", weeks: 1 },
+          ],
+        },
+      ],
+      hobbies: [
+        {
+          title: "Gym consistency",
+          why: "A schedule you can keep even on busy weeks.",
+          progress: 64,
+          accent: "from-fuchsia-500/20 to-rose-500/20",
+          bar: "bg-fuchsia-400",
+          plan: [
+            { label: "Pick 3-day split", weeks: 1 },
+            { label: "Track lifts + reps", weeks: 2 },
+            { label: "Progressive overload", weeks: 3 },
+            { label: "Deload + reflect", weeks: 2 },
+          ],
+        },
+        {
+          title: "Learn guitar basics",
+          why: "Daily tiny sessions, not long rare sessions.",
+          progress: 18,
+          accent: "from-violet-500/25 to-purple-500/20",
+          bar: "bg-violet-400",
+          plan: [
+            { label: "Finger strength routine", weeks: 1 },
+            { label: "Open chords set", weeks: 2 },
+            { label: "Strumming patterns", weeks: 2 },
+            { label: "1 full song", weeks: 1 },
+          ],
+        },
+        {
+          title: "Start a small side project",
+          why: "Ship something simple and learn by doing.",
+          progress: 10,
+          accent: "from-cyan-500/25 to-sky-500/20",
+          bar: "bg-cyan-400",
+          plan: [
+            { label: "Pick one idea", weeks: 1 },
+            { label: "Build MVP", weeks: 2 },
+            { label: "Polish + share", weeks: 1 },
+          ],
+        },
+      ],
+    }),
+    []
+  );
   const [editingHabitId, setEditingHabitId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
@@ -1047,69 +1395,17 @@ const deleteSchoolExam = (examId: string) => {
 
 
 
-const today = new Date();
-today.setHours(12, 0, 0, 0);
-
-const schoolEndDate = new Date(today.getFullYear(), 5, 20); // 20 ביוני
-schoolEndDate.setHours(12, 0, 0, 0);
-
-const msPerDay = 1000 * 60 * 60 * 24;
-
-const grossDaysLeft = Math.max(
-  0,
-  Math.ceil((schoolEndDate.getTime() - today.getTime()) / msPerDay)
-);
-
-const netDaysLeft = useMemo(() => {
-  let count = 0;
-  const cursor = new Date(today);
-
-  while (cursor <= schoolEndDate) {
-    const day = cursor.getDay(); // 0=Sunday, 6=Saturday
-    if (day !== 5 && day !== 6) {
-      count++;
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return Math.max(0, count - 1);
-}, [today.getTime(), schoolEndDate.getTime()]);
-
-const schoolTimelineDays = useMemo(() => {
-  const days: Array<{
-    key: string;
-    label: string;
-    isPassed: boolean;
-    isToday: boolean;
-    isWeekend: boolean;
-  }> = [];
-
-  const cursor = new Date(today);
-  cursor.setHours(12, 0, 0, 0);
-
-  while (cursor <= schoolEndDate) {
-    const key = dateKeyFromDate(cursor);
-    const day = cursor.getDay();
-
-    days.push({
-      key,
-      label: `${cursor.getDate()}/${cursor.getMonth() + 1}`,
-      isPassed: cursor.getTime() < today.getTime(),
-      isToday: cursor.toDateString() === today.toDateString(),
-      isWeekend: day === 5 || day === 6,
-    });
-
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return days;
-}, [today.getTime(), schoolEndDate.getTime()]);
+// (school countdown calendar constants are defined below, after state)
   // School Data State
   const [schoolData, setSchoolData] = useState<SchoolData>({
     subjects: [],
     assignments: [],
     exams: [],
     notes: [],
+  });
+  const [schoolCountdown, setSchoolCountdown] = useState<SchoolCountdown>({
+    markedPassedDays: {},
+    noSchoolDays: [],
   });
   const [selectedSchoolSubjectId, setSelectedSchoolSubjectId] = useState<string | null>(null);
   const [newAssignmentTitle, setNewAssignmentTitle] = useState("");
@@ -1119,8 +1415,9 @@ const schoolTimelineDays = useMemo(() => {
   const [newExamTitle, setNewExamTitle] = useState("");
   const [newExamDate, setNewExamDate] = useState("");
   const [newExamNotes, setNewExamNotes] = useState("");
+  const [newSchoolHubSubjectId, setNewSchoolHubSubjectId] = useState<string>("");
   const [schoolHubTab, setSchoolHubTab] = useState<
-    "overview" | "exams" | "homework" | "topics"
+    "overview" | "countdown" | "exams" | "homework" | "topics"
   >("overview");
   const [schoolSubjectTab, setSchoolSubjectTab] = useState<
     "schedule" | "homework" | "exams" | "notes"
@@ -1128,6 +1425,74 @@ const schoolTimelineDays = useMemo(() => {
   const [newNoteTitle, setNewNoteTitle] = useState("");
   const [newNoteContent, setNewNoteContent] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    return d;
+  }, []);
+
+  const schoolEndDate = useMemo(() => {
+    const d = new Date(today.getFullYear(), 5, 20); // 20 ביוני
+    d.setHours(12, 0, 0, 0);
+    return d;
+  }, [today.getFullYear()]);
+
+  const msPerDay = 1000 * 60 * 60 * 24;
+
+  const grossDaysLeft = useMemo(() => {
+    const diff = Math.floor((schoolEndDate.getTime() - today.getTime()) / msPerDay);
+    return diff >= 0 ? diff + 1 : 0;
+  }, [today.getTime(), schoolEndDate.getTime()]);
+
+  const netDaysLeft = useMemo(() => {
+    const noSchool = new Set(schoolCountdown.noSchoolDays);
+    let count = 0;
+    const cursor = new Date(today);
+
+    while (cursor <= schoolEndDate) {
+      const day = cursor.getDay(); // 0=Sunday, 6=Saturday
+      const key = dateKeyFromDate(cursor);
+      const isWeekend = day === 5 || day === 6; // Fri/Sat
+      const isNoSchool = noSchool.has(key);
+
+      if (!isWeekend && !isNoSchool) count++;
+
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return Math.max(0, count);
+  }, [today.getTime(), schoolEndDate.getTime(), schoolCountdown.noSchoolDays]);
+
+  const schoolTimelineDays = useMemo(() => {
+    const days: Array<{
+      key: string;
+      label: string;
+      isPassed: boolean;
+      isToday: boolean;
+      isWeekend: boolean;
+    }> = [];
+
+    const cursor = new Date(today);
+    cursor.setHours(12, 0, 0, 0);
+
+    while (cursor <= schoolEndDate) {
+      const key = dateKeyFromDate(cursor);
+      const day = cursor.getDay();
+
+      days.push({
+        key,
+        label: `${cursor.getDate()}/${cursor.getMonth() + 1}`,
+        isPassed: cursor.getTime() < today.getTime(),
+        isToday: cursor.toDateString() === today.toDateString(),
+        isWeekend: day === 5 || day === 6,
+      });
+
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return days;
+  }, [today.getTime(), schoolEndDate.getTime()]);
 
   const [universityStudy, setUniversityStudy] = useState<UniversityStudyStore>({ entries: [] });
   const [uniStudyMonth, setUniStudyMonth] = useState(new Date().getMonth());
@@ -1204,6 +1569,20 @@ useEffect(() => {
               notes: [],
             }
       );
+      setSchoolCountdown(
+        res.schoolCountdown && typeof res.schoolCountdown === "object"
+          ? {
+              markedPassedDays:
+                res.schoolCountdown.markedPassedDays &&
+                typeof res.schoolCountdown.markedPassedDays === "object"
+                  ? res.schoolCountdown.markedPassedDays
+                  : {},
+              noSchoolDays: Array.isArray(res.schoolCountdown.noSchoolDays)
+                ? res.schoolCountdown.noSchoolDays
+                : [],
+            }
+          : { markedPassedDays: {}, noSchoolDays: [] }
+      );
       setUniversityStudy(
         res.universityStudy
           ? normalizeUniversityStudyStore(res.universityStudy)
@@ -1219,6 +1598,7 @@ useEffect(() => {
         exams: [],
         notes: [],
       });
+      setSchoolCountdown({ markedPassedDays: {}, noSchoolDays: [] });
       setUniversityStudy({ entries: [] });
     }
 
@@ -1239,11 +1619,12 @@ useEffect(() => {
     courses,
      gymData,
     schoolData,
+    schoolCountdown,
     universityStudy,
   };
 
   saveAllData(DEMO_USER_ID, payload);
-}, [hasLoadedData, habits, gymData, courses, schoolData, universityStudy]);
+}, [hasLoadedData, habits, gymData, courses, schoolData, schoolCountdown, universityStudy]);
 
   const initializeSchoolData = () => {
     const mockSubjects: SchoolSubject[] = [
@@ -1937,6 +2318,13 @@ const overallWeeklyPercent =
               active={activePage === "school"}
               onClick={() => setActivePage("school")}
             />
+            <Link
+              href="/time-planning"
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 text-zinc-500 hover:text-white hover:bg-zinc-900"
+            >
+              <CalendarDays size={18} />
+              <span className="text-sm font-bold">תכנון זמן</span>
+            </Link>
           </nav>
 
           <div className="mt-auto pt-8 border-t border-zinc-800/50 space-y-4">
@@ -1956,6 +2344,174 @@ const overallWeeklyPercent =
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-zinc-900/20 via-transparent to-transparent">
           <div className="max-w-6xl mx-auto p-12">
+            {activePage === "home" && (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <header className="mb-12 flex flex-wrap items-end justify-between gap-6">
+                  <div>
+                    <div className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/60 px-3 py-1 text-xs font-black text-zinc-300">
+                      <Sparkles size={14} className="text-zinc-400" aria-hidden />
+                      My Goals
+                    </div>
+                    <h2 className="mt-4 text-4xl font-black tracking-tight text-white">Home dashboard</h2>
+                    <p className="mt-2 text-zinc-400 text-lg">
+                      University (1), School (2), Hobbies (3) — each goal includes a plan and a chart.
+                    </p>
+                  </div>
+
+                  <div className="rounded-3xl border border-zinc-800 bg-zinc-950/40 p-4">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Today</div>
+                    <div className="mt-1 text-sm font-black text-white">
+                      {new Date().toLocaleDateString("en-US", {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </div>
+                  </div>
+                </header>
+
+                {(
+                  [
+                    {
+                      key: "university",
+                      title: "University goals (1)",
+                      icon: <GraduationCap size={18} />,
+                      items: homeGoals.university,
+                      columns: "md:grid-cols-2",
+                    },
+                    {
+                      key: "school",
+                      title: "School goals (2)",
+                      icon: <School size={18} />,
+                      items: homeGoals.school,
+                      columns: "md:grid-cols-2",
+                    },
+                    {
+                      key: "hobbies",
+                      title: "Hobbies (3)",
+                      icon: <Trophy size={18} />,
+                      items: homeGoals.hobbies,
+                      columns: "md:grid-cols-3",
+                    },
+                  ] as const
+                ).map((section) => (
+                  <section key={section.key} className="mb-12 space-y-6">
+                    <div className="flex items-center gap-3">
+                      <div className="grid h-11 w-11 place-items-center rounded-2xl border border-zinc-800 bg-zinc-950/40 text-white/80">
+                        {section.icon}
+                      </div>
+                      <div>
+                        <h3 className="text-2xl font-black text-white">{section.title}</h3>
+                        <p className="mt-0.5 text-sm text-zinc-400">Your personal goals + plan milestones.</p>
+                      </div>
+                    </div>
+
+                    <div className={`grid grid-cols-1 gap-6 ${section.columns}`}>
+                      {section.items.map((g) => {
+                        const maxWeeks = Math.max(1, ...g.plan.map((p) => p.weeks));
+                        return (
+                          <div
+                            key={g.title}
+                            className="relative overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950/50 p-6 shadow-[0_0_40px_rgba(0,0,0,0.35)]"
+                          >
+                            <div
+                              aria-hidden
+                              className={`pointer-events-none absolute -top-20 -right-16 h-48 w-48 rounded-full blur-3xl opacity-70 bg-gradient-to-br ${g.accent}`}
+                            />
+                            <div className="relative space-y-4">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                  <div className="text-xs font-black uppercase tracking-wide text-zinc-500">
+                                    My goal
+                                  </div>
+                                  <h4 className="mt-1 truncate text-xl font-black text-white">{g.title}</h4>
+                                  <p className="mt-1 line-clamp-2 text-sm text-zinc-400">{g.why}</p>
+                                </div>
+                                <div className="shrink-0 rounded-2xl border border-zinc-800 bg-black/30 px-3 py-2 text-right">
+                                  <div className="text-[10px] font-black uppercase tracking-widest text-zinc-600">
+                                    Progress
+                                  </div>
+                                  <div className="text-sm font-black tabular-nums text-white">{g.progress}%</div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl border border-zinc-800 bg-black/25 p-4">
+                                <div className="mb-2 flex items-center justify-between text-xs">
+                                  <span className="text-zinc-500">Plan completion</span>
+                                  <span className="font-black tabular-nums text-white">{g.progress}%</span>
+                                </div>
+                                <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-900">
+                                  <div className={`h-full rounded-full ${g.bar}`} style={{ width: `${g.progress}%` }} />
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl border border-zinc-800 bg-black/25 p-4">
+                                <div className="mb-3 flex items-center justify-between">
+                                  <div className="text-xs font-black uppercase tracking-widest text-zinc-600">
+                                    Plan chart
+                                  </div>
+                                  <div className="text-[11px] font-bold text-zinc-500">{g.plan.length} steps</div>
+                                </div>
+                                <div className="flex items-end gap-2">
+                                  {g.plan.map((p) => (
+                                    <div key={p.label} className="w-5" title={`${p.label} • ${p.weeks}w`}>
+                                      <div className="h-12 flex items-end">
+                                        <div
+                                          className="w-full rounded-full bg-zinc-800"
+                                          style={{
+                                            height: `${Math.round(12 + 34 * (p.weeks / maxWeeks))}px`,
+                                          }}
+                                        >
+                                          <div className="h-full w-full rounded-full bg-gradient-to-b from-white/40 to-white/10" />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl border border-zinc-800 bg-black/25 p-4">
+                                <div className="mb-2 text-xs font-black uppercase tracking-widest text-zinc-600">
+                                  Action plan
+                                </div>
+                                <ol className="space-y-2">
+                                  {g.plan.map((p, idx) => (
+                                    <li key={p.label} className="flex items-start gap-2 text-sm text-zinc-300">
+                                      <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/5 text-[11px] font-black text-white/80">
+                                        {idx + 1}
+                                      </span>
+                                      <span className="min-w-0 flex-1">
+                                        <span className="font-bold text-white/90">{p.label}</span>{" "}
+                                        <span className="text-zinc-500">· {p.weeks}w</span>
+                                      </span>
+                                      <ChevronRight size={16} className="mt-0.5 shrink-0 text-zinc-700" aria-hidden />
+                                    </li>
+                                  ))}
+                                </ol>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-4 pt-1">
+                                <div className="flex items-center gap-2 text-xs text-zinc-500">
+                                  <CheckCircle2 size={16} className="text-zinc-700" aria-hidden />
+                                  This plan belongs to you.
+                                </div>
+                                <button
+                                  type="button"
+                                  className="rounded-2xl border border-zinc-800 bg-zinc-950/40 px-4 py-2 text-xs font-black text-zinc-200 hover:bg-zinc-900/60 transition-colors"
+                                >
+                                  Open
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
             {activePage === "habits" && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <header className="mb-12 flex justify-between items-end">
@@ -4061,6 +4617,7 @@ const overallWeeklyPercent =
                       {(
                         [
                           { id: "overview" as const, label: "סקירה ולו״ז", Icon: LayoutDashboard },
+                          { id: "countdown" as const, label: "ימים שנשארו", Icon: CalendarIcon },
                           { id: "exams" as const, label: "כל המבחנים", Icon: CalendarDays },
                           { id: "homework" as const, label: "כל שיעורי הבית", Icon: ClipboardList },
                           { id: "topics" as const, label: "נושאים והערות", Icon: BookMarked },
@@ -4084,95 +4641,99 @@ const overallWeeklyPercent =
 
                     {schoolHubTab === "overview" && (
                       <div className="space-y-10">
-                        <section className="rounded-3xl border border-zinc-800 bg-zinc-900/35 p-6 md:p-8">
-                          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-                            <div>
-                              <h3 className="flex items-center gap-2 text-xl font-black text-white md:text-2xl">
-                                <CalendarDays className="text-orange-400" size={24} />
-                                לו״ז משולב — כל המקצועות
-                              </h3>
-                              <p className="mt-1 text-sm text-zinc-500">
-                                מבחנים ומטלות פתוחות לפי תאריך (מהקרוב לרחוק).
-                              </p>
+                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 items-start">
+                          <section className="rounded-3xl border border-zinc-800 bg-zinc-900/35 p-6 md:p-8 lg:col-span-2">
+                            <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+                              <div>
+                                <h3 className="flex items-center gap-2 text-xl font-black text-white md:text-2xl">
+                                  <CalendarDays className="text-orange-400" size={24} />
+                                  לו״ז משולב — כל המקצועות
+                                </h3>
+                                <p className="mt-1 text-sm text-zinc-500">
+                                  מבחנים ומטלות פתוחות לפי תאריך (מהקרוב לרחוק).
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                          {schoolAgendaAll.length === 0 ? (
-                            <p className="rounded-2xl border border-zinc-800 bg-black/20 py-12 text-center text-zinc-500">
-                              אין מבחנים או מטלות פתוחות. הוסף דרך כרטיסי המקצועות למטה.
-                            </p>
-                          ) : (
-                            <ul className="relative space-y-2 before:absolute before:top-2 before:bottom-2 before:w-px before:bg-zinc-800 before:start-4 md:before:start-5">
-                              {schoolAgendaAll.map((row) => {
-                                const dateStr =
-                                  row.kind === "exam" ? row.exam.date : row.assignment.dueDate;
-                                const label =
-                                  row.kind === "exam" ? row.exam.title : row.assignment.title;
-                                const todayKey = new Date().toISOString().split("T")[0];
-                                const days = Math.round(
-                                  (schoolDayTime(dateStr) - schoolDayTime(todayKey)) / 86400000
-                                );
-                                return (
-                                  <li
-                                    key={`${row.kind}-${row.id}`}
-                                    className="relative flex flex-wrap items-start gap-3 rounded-2xl border border-zinc-800/80 bg-zinc-950/50 py-3 pe-4 ps-12 md:ps-14"
-                                  >
-                                    <span
-                                      className="absolute start-3 top-3 flex h-4 w-4 rounded-full border-2 border-zinc-950 md:start-4"
-                                      style={{
-                                        backgroundColor:
-                                          row.kind === "exam" ? row.subject.color : `${row.subject.color}99`,
-                                      }}
-                                    />
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <span
-                                          className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
-                                            row.kind === "exam"
-                                              ? "bg-blue-500/20 text-blue-200"
-                                              : "bg-amber-500/15 text-amber-200"
-                                          }`}
-                                        >
-                                          {row.kind === "exam" ? "מבחן" : "מטלה"}
-                                        </span>
-                                        <span
-                                          className="text-xs font-bold"
-                                          style={{ color: row.subject.color }}
-                                        >
-                                          {row.subject.name}
-                                        </span>
-                                        <span className="text-xs font-bold tabular-nums text-zinc-500">
-                                          {new Date(dateStr + "T12:00:00").toLocaleDateString("he-IL", {
-                                            weekday: "short",
-                                            day: "numeric",
-                                            month: "short",
-                                          })}
-                                        </span>
-                                        <span className="text-xs text-zinc-600">
-                                          {days === 0
-                                            ? "היום"
-                                            : days > 0
-                                              ? `בעוד ${days} ימים`
-                                              : `לפני ${Math.abs(days)} ימים`}
-                                        </span>
-                                      </div>
-                                      <p className="mt-1 font-bold text-white">{label}</p>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedSchoolSubjectId(row.subject.id);
-                                        setSchoolSubjectTab(row.kind === "exam" ? "exams" : "homework");
-                                      }}
-                                      className="shrink-0 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-bold text-zinc-300 transition-colors hover:border-orange-500/50 hover:text-white"
+                            {schoolAgendaAll.length === 0 ? (
+                              <p className="rounded-2xl border border-zinc-800 bg-black/20 py-12 text-center text-zinc-500">
+                                אין מבחנים או מטלות פתוחות. הוסף דרך כרטיסי המקצועות למטה.
+                              </p>
+                            ) : (
+                              <ul className="relative space-y-2 before:absolute before:top-2 before:bottom-2 before:w-px before:bg-zinc-800 before:start-4 md:before:start-5">
+                                {schoolAgendaAll.map((row) => {
+                                  const dateStr =
+                                    row.kind === "exam" ? row.exam.date : row.assignment.dueDate;
+                                  const label =
+                                    row.kind === "exam" ? row.exam.title : row.assignment.title;
+                                  const todayKey = isoTodayKey();
+                                  const days = Math.round(
+                                    (schoolDayTime(dateStr) - schoolDayTime(todayKey)) / 86400000
+                                  );
+                                  return (
+                                    <li
+                                      key={`${row.kind}-${row.id}`}
+                                      className="relative flex flex-wrap items-start gap-3 rounded-2xl border border-zinc-800/80 bg-zinc-950/50 py-3 pe-4 ps-12 md:ps-14"
                                     >
-                                      למקצוע
-                                    </button>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          )}
-                        </section>
+                                      <span
+                                        className="absolute start-3 top-3 flex h-4 w-4 rounded-full border-2 border-zinc-950 md:start-4"
+                                        style={{
+                                          backgroundColor:
+                                            row.kind === "exam" ? row.subject.color : `${row.subject.color}99`,
+                                        }}
+                                      />
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span
+                                            className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+                                              row.kind === "exam"
+                                                ? "bg-blue-500/20 text-blue-200"
+                                                : "bg-amber-500/15 text-amber-200"
+                                            }`}
+                                          >
+                                            {row.kind === "exam" ? "מבחן" : "מטלה"}
+                                          </span>
+                                          <span
+                                            className="text-xs font-bold"
+                                            style={{ color: row.subject.color }}
+                                          >
+                                            {row.subject.name}
+                                          </span>
+                                          <span className="text-xs font-bold tabular-nums text-zinc-500">
+                                            {new Date(dateStr + "T12:00:00").toLocaleDateString("he-IL", {
+                                              weekday: "short",
+                                              day: "numeric",
+                                              month: "short",
+                                            })}
+                                          </span>
+                                          <span className="text-xs text-zinc-600">
+                                            {days === 0
+                                              ? "היום"
+                                              : days > 0
+                                                ? `בעוד ${days} ימים`
+                                                : `לפני ${Math.abs(days)} ימים`}
+                                          </span>
+                                        </div>
+                                        <p className="mt-1 font-bold text-white">{label}</p>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedSchoolSubjectId(row.subject.id);
+                                          setSchoolSubjectTab(row.kind === "exam" ? "exams" : "homework");
+                                        }}
+                                        className="shrink-0 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-bold text-zinc-300 transition-colors hover:border-orange-500/50 hover:text-white"
+                                      >
+                                        למקצוע
+                                      </button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </section>
+
+                          <div className="hidden lg:block lg:col-span-1" />
+                        </div>
 
                         <section>
                           <h3 className="mb-4 text-xl font-black text-white">המקצועות שלי</h3>
@@ -4241,10 +4802,132 @@ const overallWeeklyPercent =
                       </div>
                     )}
 
+                    {schoolHubTab === "countdown" && (
+                      <div className="space-y-6">
+                        <header className="flex flex-wrap items-end justify-between gap-4">
+                          <div>
+                            <h3 className="text-2xl font-black text-white md:text-3xl">ימים שנשארו עד 20 ביוני</h3>
+                            <p className="mt-1 text-sm text-zinc-500">
+                              סמן ימים שעברו (בסגנון גיר) והגדר ימים בלי לימודים כדי לקבל נטו אמיתי.
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 px-4 py-3">
+                              <div className="text-[10px] font-black uppercase tracking-widest text-zinc-600">
+                                ברוטו
+                              </div>
+                              <div className="mt-1 text-2xl font-black text-white tabular-nums">
+                                {grossDaysLeft}
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 px-4 py-3">
+                              <div className="text-[10px] font-black uppercase tracking-widest text-zinc-600">
+                                נטו לימודים
+                              </div>
+                              <div className="mt-1 text-2xl font-black text-white tabular-nums">
+                                {netDaysLeft}
+                              </div>
+                            </div>
+                          </div>
+                        </header>
+
+                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                          <div className="lg:col-span-8">
+                            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/35 p-6 md:p-8">
+                              <SchoolCountdownPanel
+                                today={today}
+                                endDate={schoolEndDate}
+                                value={schoolCountdown}
+                                onChange={setSchoolCountdown}
+                                grossDaysLeft={grossDaysLeft}
+                                netDaysLeft={netDaysLeft}
+                              />
+                            </div>
+                          </div>
+                          <div className="lg:col-span-4 space-y-4">
+                            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/35 p-6">
+                              <div className="text-xs font-black uppercase tracking-widest text-zinc-600">
+                                הסבר מהיר
+                              </div>
+                              <ul className="mt-3 space-y-2 text-sm text-zinc-300">
+                                <li>• לחץ על יום (רק עד היום) כדי לסמן “עבר”.</li>
+                                <li>• ימי שישי/שבת לא נכנסים לנטו.</li>
+                                <li>• הוסף כאן “ימים בלי לימודים” (עצמאות וכו’) כדי להוריד אותם מהנטו.</li>
+                              </ul>
+                            </div>
+                            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/35 p-6">
+                              <div className="text-xs font-black uppercase tracking-widest text-zinc-600">
+                                טיפ
+                              </div>
+                              <p className="mt-3 text-sm text-zinc-300">
+                                אם אין מקצועות/נתונים עדיין — עבור ל״נושאים והערות״ והפעל את טעינת הדמו, או הוסף מקצועות
+                                ואז תתחיל להוסיף מבחנים ושיעורי בית.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {schoolHubTab === "exams" && (
                       <section className="rounded-3xl border border-zinc-800 bg-zinc-900/35 p-6 md:p-8">
                         <h3 className="mb-2 text-xl font-black text-white md:text-2xl">כל המבחנים</h3>
                         <p className="mb-6 text-sm text-zinc-500">לפי תאריך, בכל המקצועות.</p>
+                        <div className="mb-6 rounded-3xl border border-zinc-800 bg-zinc-950/50 p-5">
+                          <h4 className="text-sm font-black text-white">הוסף מבחן</h4>
+                          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
+                            <select
+                              value={newSchoolHubSubjectId}
+                              onChange={(e) => setNewSchoolHubSubjectId(e.target.value)}
+                              className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500"
+                            >
+                              <option value="">בחר מקצוע</option>
+                              {schoolData.subjects.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.name}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              placeholder="שם המבחן"
+                              value={newExamTitle}
+                              onChange={(e) => setNewExamTitle(e.target.value)}
+                              className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500 md:col-span-2"
+                            />
+                            <input
+                              type="date"
+                              value={newExamDate}
+                              onChange={(e) => setNewExamDate(e.target.value)}
+                              className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500"
+                            />
+                          </div>
+                          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
+                            <input
+                              type="text"
+                              placeholder="הערות (אופציונלי)"
+                              value={newExamNotes}
+                              onChange={(e) => setNewExamNotes(e.target.value)}
+                              className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500 md:col-span-3"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!newSchoolHubSubjectId) return;
+                                setSelectedSchoolSubjectId(newSchoolHubSubjectId);
+                                addSchoolExam();
+                              }}
+                              className="rounded-2xl bg-blue-500 px-5 py-3 font-black text-white hover:bg-blue-600 transition-colors"
+                            >
+                              הוסף
+                            </button>
+                          </div>
+                          {schoolData.subjects.length === 0 && (
+                            <p className="mt-3 text-xs text-zinc-500">
+                              קודם הוסף מקצועות, ואז תוכל להוסיף מבחנים.
+                            </p>
+                          )}
+                        </div>
                         {schoolData.exams.filter((e) => e.status === "upcoming").length === 0 ? (
                           <p className="py-12 text-center text-zinc-500">אין מבחנים קרובים</p>
                         ) : (
@@ -4322,6 +5005,82 @@ const overallWeeklyPercent =
                       <section className="rounded-3xl border border-zinc-800 bg-zinc-900/35 p-6 md:p-8">
                         <h3 className="mb-2 text-xl font-black text-white md:text-2xl">כל שיעורי הבית</h3>
                         <p className="mb-6 text-sm text-zinc-500">מטלות שלא סומנו כהושלמו, לפי תאריך יעד.</p>
+                        <div className="mb-6 rounded-3xl border border-zinc-800 bg-zinc-950/50 p-5">
+                          <h4 className="text-sm font-black text-white">הוסף שיעורי בית</h4>
+                          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
+                            <select
+                              value={newSchoolHubSubjectId}
+                              onChange={(e) => setNewSchoolHubSubjectId(e.target.value)}
+                              className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500"
+                            >
+                              <option value="">בחר מקצוע</option>
+                              {schoolData.subjects.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.name}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              placeholder="שם המטלה"
+                              value={newAssignmentTitle}
+                              onChange={(e) => setNewAssignmentTitle(e.target.value)}
+                              className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500 md:col-span-2"
+                            />
+                            <input
+                              type="date"
+                              value={newAssignmentDue}
+                              onChange={(e) => setNewAssignmentDue(e.target.value)}
+                              className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500"
+                            />
+                          </div>
+
+                          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
+                            <select
+                              value={newAssignmentType}
+                              onChange={(e) =>
+                                setNewAssignmentType(e.target.value as SchoolAssignment["type"])
+                              }
+                              className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500"
+                            >
+                              <option value="homework">שיעורי בית</option>
+                              <option value="reading">קריאה</option>
+                              <option value="worksheet">דף עבודה</option>
+                              <option value="project">פרויקט</option>
+                              <option value="study">לימוד</option>
+                            </select>
+                            <select
+                              value={newAssignmentPriority}
+                              onChange={(e) =>
+                                setNewAssignmentPriority(e.target.value as "low" | "medium" | "high")
+                              }
+                              className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-white outline-none focus:border-blue-500"
+                            >
+                              <option value="low">עדיפות נמוכה</option>
+                              <option value="medium">עדיפות בינונית</option>
+                              <option value="high">עדיפות גבוהה</option>
+                            </select>
+                            <div className="md:col-span-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!newSchoolHubSubjectId) return;
+                                  setSelectedSchoolSubjectId(newSchoolHubSubjectId);
+                                  addSchoolAssignment();
+                                }}
+                                className="w-full rounded-2xl bg-blue-500 px-5 py-3 font-black text-white hover:bg-blue-600 transition-colors"
+                              >
+                                הוסף
+                              </button>
+                            </div>
+                          </div>
+
+                          {schoolData.subjects.length === 0 && (
+                            <p className="mt-3 text-xs text-zinc-500">
+                              קודם הוסף מקצועות, ואז תוכל להוסיף שיעורי בית.
+                            </p>
+                          )}
+                        </div>
                         {schoolData.assignments.filter((a) => !a.completed).length === 0 ? (
                           <p className="py-12 text-center text-zinc-500">אין מטלות פתוחות</p>
                         ) : (
