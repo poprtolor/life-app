@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { supabase } from "../lib/supabase";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -238,6 +239,27 @@ const SEED_EXAMS: Exam[] = [
 
 let nextId = 1000;
 function genId() { return String(nextId++); }
+
+// ─── Persistence (same table + pattern as app/page.tsx) ───────────────────────
+
+const TP_USER_ID = "ronen-local-001-tp";
+
+async function saveTPData(tasks: ScheduleTask[], exams: Exam[]) {
+  const { error } = await supabase
+    .from("profiles_data1")
+    .upsert({ user_id: TP_USER_ID, data: { tasks, exams } }, { onConflict: "user_id" });
+  if (error) console.error("TP save error:", error);
+}
+
+async function loadTPData(): Promise<{ tasks: ScheduleTask[]; exams: Exam[] } | null> {
+  const { data, error } = await supabase
+    .from("profiles_data1")
+    .select("data")
+    .eq("user_id", TP_USER_ID)
+    .maybeSingle();
+  if (error) { console.error("TP load error:", error); return null; }
+  return (data?.data as { tasks: ScheduleTask[]; exams: Exam[] }) ?? null;
+}
 
 // ─── Shared UI primitives ─────────────────────────────────────────────────────
 
@@ -766,6 +788,7 @@ function ExamModal({ editing, onSave, onClose }: {
 
 export default function TimePlanningPage() {
   // ── Schedule state ──────────────────────────────────────────────────────────
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [tasks, setTasks]         = useState<ScheduleTask[]>(SEED_TASKS);
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [calYear, setCalYear]     = useState(TODAY.getFullYear());
@@ -787,6 +810,28 @@ export default function TimePlanningPage() {
 
   // ── Tab ─────────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<"schedule" | "exams">("schedule");
+
+  // ─── Load from Supabase on mount ────────────────────────────────────────────
+
+  useEffect(() => {
+    let alive = true;
+    loadTPData().then((saved) => {
+      if (!alive) return;
+      if (saved) {
+        if (Array.isArray(saved.tasks)) setTasks(saved.tasks);
+        if (Array.isArray(saved.exams)) setExams(saved.exams);
+      }
+      setHasLoaded(true);
+    });
+    return () => { alive = false; };
+  }, []);
+
+  // ─── Auto-save to Supabase whenever tasks or exams change ───────────────────
+
+  useEffect(() => {
+    if (!hasLoaded) return;
+    saveTPData(tasks, exams);
+  }, [hasLoaded, tasks, exams]);
 
   // ─── Derived: schedule ──────────────────────────────────────────────────────
 
