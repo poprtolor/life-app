@@ -2325,6 +2325,13 @@ const overallWeeklyPercent =
               <CalendarDays size={18} />
               <span className="text-sm font-bold">תכנון זמן</span>
             </Link>
+            <Link
+              href="/goals"
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 text-zinc-500 hover:text-white hover:bg-zinc-900"
+            >
+              <Target size={18} />
+              <span className="text-sm font-bold">המטרות שלי</span>
+            </Link>
           </nav>
 
           <div className="mt-auto pt-8 border-t border-zinc-800/50 space-y-4">
