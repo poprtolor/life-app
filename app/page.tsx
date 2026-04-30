@@ -35,7 +35,7 @@ Dumbbell,
 } from "lucide-react";
 
 // --- Types ---
-type PageKey = "home" | "habits" | "gym" | "university" | "school";
+type PageKey = "habits" | "gym" | "university" | "school";
 type HabitDayStatus = "done" | "missed" | "none";
 
 type GymWorkoutDayStatus = "done" | "missed" | "none";
@@ -1185,98 +1185,10 @@ const DEMO_USER_ID = "ronen-local-001";
 
 // --- Main Component ---
 export default function Home() {
-  const [activePage, setActivePage] = useState<PageKey>("home");
+  const [activePage, setActivePage] = useState<PageKey>("habits");
   const [selectedHabitId, setSelectedHabitId] = useState<number | null>(1);
   const [habits, setHabits] = useState<Habit[]>(initialHabits);
   const [newHabitName, setNewHabitName] = useState("");
-  const homeGoals = useMemo(
-    () => ({
-      university: [
-        {
-          title: "Finish the semester strong",
-          why: "Consistency + practice exams + weekly reviews.",
-          progress: 42,
-          accent: "from-sky-500/25 to-indigo-500/20",
-          bar: "bg-sky-400",
-          plan: [
-            { label: "Map syllabus + outcomes", weeks: 1 },
-            { label: "Weekly deep-work blocks", weeks: 2 },
-            { label: "Practice exams + review", weeks: 3 },
-            { label: "Final sprint plan", weeks: 2 },
-          ],
-        },
-      ],
-      school: [
-        {
-          title: "Raise math grade",
-          why: "Small daily practice beats cramming.",
-          progress: 30,
-          accent: "from-emerald-500/25 to-lime-500/20",
-          bar: "bg-emerald-400",
-          plan: [
-            { label: "Diagnose weak topics", weeks: 1 },
-            { label: "Daily 25-min practice", weeks: 2 },
-            { label: "Past papers routine", weeks: 2 },
-            { label: "Error log + fixes", weeks: 1 },
-          ],
-        },
-        {
-          title: "Improve English speaking",
-          why: "Practice small routines consistently.",
-          progress: 55,
-          accent: "from-amber-500/25 to-orange-500/20",
-          bar: "bg-amber-400",
-          plan: [
-            { label: "Daily shadowing", weeks: 1 },
-            { label: "Weekly speaking prompts", weeks: 2 },
-            { label: "Record + self review", weeks: 1 },
-            { label: "Mini presentation", weeks: 1 },
-          ],
-        },
-      ],
-      hobbies: [
-        {
-          title: "Gym consistency",
-          why: "A schedule you can keep even on busy weeks.",
-          progress: 64,
-          accent: "from-fuchsia-500/20 to-rose-500/20",
-          bar: "bg-fuchsia-400",
-          plan: [
-            { label: "Pick 3-day split", weeks: 1 },
-            { label: "Track lifts + reps", weeks: 2 },
-            { label: "Progressive overload", weeks: 3 },
-            { label: "Deload + reflect", weeks: 2 },
-          ],
-        },
-        {
-          title: "Learn guitar basics",
-          why: "Daily tiny sessions, not long rare sessions.",
-          progress: 18,
-          accent: "from-violet-500/25 to-purple-500/20",
-          bar: "bg-violet-400",
-          plan: [
-            { label: "Finger strength routine", weeks: 1 },
-            { label: "Open chords set", weeks: 2 },
-            { label: "Strumming patterns", weeks: 2 },
-            { label: "1 full song", weeks: 1 },
-          ],
-        },
-        {
-          title: "Start a small side project",
-          why: "Ship something simple and learn by doing.",
-          progress: 10,
-          accent: "from-cyan-500/25 to-sky-500/20",
-          bar: "bg-cyan-400",
-          plan: [
-            { label: "Pick one idea", weeks: 1 },
-            { label: "Build MVP", weeks: 2 },
-            { label: "Polish + share", weeks: 1 },
-          ],
-        },
-      ],
-    }),
-    []
-  );
   const [editingHabitId, setEditingHabitId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
@@ -2289,12 +2201,6 @@ const overallWeeklyPercent =
 
           <nav className="space-y-1">
             <NavItem
-              icon={<LayoutDashboard size={18} />}
-              label="דף הבית"
-              active={activePage === "home"}
-              onClick={() => setActivePage("home")}
-            />
-            <NavItem
               icon={<CheckCircle2 size={18} />}
               label="הרגלים"
               active={activePage === "habits"}
@@ -2351,174 +2257,6 @@ const overallWeeklyPercent =
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-zinc-900/20 via-transparent to-transparent">
           <div className="max-w-6xl mx-auto p-12">
-            {activePage === "home" && (
-              <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <header className="mb-12 flex flex-wrap items-end justify-between gap-6">
-                  <div>
-                    <div className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/60 px-3 py-1 text-xs font-black text-zinc-300">
-                      <Sparkles size={14} className="text-zinc-400" aria-hidden />
-                      My Goals
-                    </div>
-                    <h2 className="mt-4 text-4xl font-black tracking-tight text-white">Home dashboard</h2>
-                    <p className="mt-2 text-zinc-400 text-lg">
-                      University (1), School (2), Hobbies (3) — each goal includes a plan and a chart.
-                    </p>
-                  </div>
-
-                  <div className="rounded-3xl border border-zinc-800 bg-zinc-950/40 p-4">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Today</div>
-                    <div className="mt-1 text-sm font-black text-white">
-                      {new Date().toLocaleDateString("en-US", {
-                        weekday: "short",
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </div>
-                  </div>
-                </header>
-
-                {(
-                  [
-                    {
-                      key: "university",
-                      title: "University goals (1)",
-                      icon: <GraduationCap size={18} />,
-                      items: homeGoals.university,
-                      columns: "md:grid-cols-2",
-                    },
-                    {
-                      key: "school",
-                      title: "School goals (2)",
-                      icon: <School size={18} />,
-                      items: homeGoals.school,
-                      columns: "md:grid-cols-2",
-                    },
-                    {
-                      key: "hobbies",
-                      title: "Hobbies (3)",
-                      icon: <Trophy size={18} />,
-                      items: homeGoals.hobbies,
-                      columns: "md:grid-cols-3",
-                    },
-                  ] as const
-                ).map((section) => (
-                  <section key={section.key} className="mb-12 space-y-6">
-                    <div className="flex items-center gap-3">
-                      <div className="grid h-11 w-11 place-items-center rounded-2xl border border-zinc-800 bg-zinc-950/40 text-white/80">
-                        {section.icon}
-                      </div>
-                      <div>
-                        <h3 className="text-2xl font-black text-white">{section.title}</h3>
-                        <p className="mt-0.5 text-sm text-zinc-400">Your personal goals + plan milestones.</p>
-                      </div>
-                    </div>
-
-                    <div className={`grid grid-cols-1 gap-6 ${section.columns}`}>
-                      {section.items.map((g) => {
-                        const maxWeeks = Math.max(1, ...g.plan.map((p) => p.weeks));
-                        return (
-                          <div
-                            key={g.title}
-                            className="relative overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950/50 p-6 shadow-[0_0_40px_rgba(0,0,0,0.35)]"
-                          >
-                            <div
-                              aria-hidden
-                              className={`pointer-events-none absolute -top-20 -right-16 h-48 w-48 rounded-full blur-3xl opacity-70 bg-gradient-to-br ${g.accent}`}
-                            />
-                            <div className="relative space-y-4">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="min-w-0">
-                                  <div className="text-xs font-black uppercase tracking-wide text-zinc-500">
-                                    My goal
-                                  </div>
-                                  <h4 className="mt-1 truncate text-xl font-black text-white">{g.title}</h4>
-                                  <p className="mt-1 line-clamp-2 text-sm text-zinc-400">{g.why}</p>
-                                </div>
-                                <div className="shrink-0 rounded-2xl border border-zinc-800 bg-black/30 px-3 py-2 text-right">
-                                  <div className="text-[10px] font-black uppercase tracking-widest text-zinc-600">
-                                    Progress
-                                  </div>
-                                  <div className="text-sm font-black tabular-nums text-white">{g.progress}%</div>
-                                </div>
-                              </div>
-
-                              <div className="rounded-2xl border border-zinc-800 bg-black/25 p-4">
-                                <div className="mb-2 flex items-center justify-between text-xs">
-                                  <span className="text-zinc-500">Plan completion</span>
-                                  <span className="font-black tabular-nums text-white">{g.progress}%</span>
-                                </div>
-                                <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-900">
-                                  <div className={`h-full rounded-full ${g.bar}`} style={{ width: `${g.progress}%` }} />
-                                </div>
-                              </div>
-
-                              <div className="rounded-2xl border border-zinc-800 bg-black/25 p-4">
-                                <div className="mb-3 flex items-center justify-between">
-                                  <div className="text-xs font-black uppercase tracking-widest text-zinc-600">
-                                    Plan chart
-                                  </div>
-                                  <div className="text-[11px] font-bold text-zinc-500">{g.plan.length} steps</div>
-                                </div>
-                                <div className="flex items-end gap-2">
-                                  {g.plan.map((p) => (
-                                    <div key={p.label} className="w-5" title={`${p.label} • ${p.weeks}w`}>
-                                      <div className="h-12 flex items-end">
-                                        <div
-                                          className="w-full rounded-full bg-zinc-800"
-                                          style={{
-                                            height: `${Math.round(12 + 34 * (p.weeks / maxWeeks))}px`,
-                                          }}
-                                        >
-                                          <div className="h-full w-full rounded-full bg-gradient-to-b from-white/40 to-white/10" />
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-
-                              <div className="rounded-2xl border border-zinc-800 bg-black/25 p-4">
-                                <div className="mb-2 text-xs font-black uppercase tracking-widest text-zinc-600">
-                                  Action plan
-                                </div>
-                                <ol className="space-y-2">
-                                  {g.plan.map((p, idx) => (
-                                    <li key={p.label} className="flex items-start gap-2 text-sm text-zinc-300">
-                                      <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/5 text-[11px] font-black text-white/80">
-                                        {idx + 1}
-                                      </span>
-                                      <span className="min-w-0 flex-1">
-                                        <span className="font-bold text-white/90">{p.label}</span>{" "}
-                                        <span className="text-zinc-500">· {p.weeks}w</span>
-                                      </span>
-                                      <ChevronRight size={16} className="mt-0.5 shrink-0 text-zinc-700" aria-hidden />
-                                    </li>
-                                  ))}
-                                </ol>
-                              </div>
-
-                              <div className="flex items-center justify-between gap-4 pt-1">
-                                <div className="flex items-center gap-2 text-xs text-zinc-500">
-                                  <CheckCircle2 size={16} className="text-zinc-700" aria-hidden />
-                                  This plan belongs to you.
-                                </div>
-                                <button
-                                  type="button"
-                                  className="rounded-2xl border border-zinc-800 bg-zinc-950/40 px-4 py-2 text-xs font-black text-zinc-200 hover:bg-zinc-900/60 transition-colors"
-                                >
-                                  Open
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            )}
             {activePage === "habits" && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <header className="mb-12 flex justify-between items-end">
