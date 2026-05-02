@@ -65,6 +65,7 @@ type Habit = {
   description: string;
   category: string;
   days: Record<string, HabitDayStatus>;
+  notes?: Record<string, string>;
 };
 
 type TaskType = "watch" | "read" | "exercise" | "general";
@@ -784,6 +785,12 @@ function sumSecondsAllInWeek(entries: UniversityStudyEntry[], start: Date, end: 
     .reduce((a, e) => a + normalizeStudySeconds(e.seconds), 0);
 }
 
+function sumAllSecondsForCourse(entries: UniversityStudyEntry[], courseId: number): number {
+  return entries
+    .filter((e) => e.courseId === courseId)
+    .reduce((a, e) => a + normalizeStudySeconds(e.seconds), 0);
+}
+
 function UniversityStudyTimerFullPage({
   date,
   courseName,
@@ -1187,6 +1194,7 @@ const DEMO_USER_ID = "ronen-local-001";
 export default function Home() {
   const [activePage, setActivePage] = useState<PageKey>("habits");
   const [selectedHabitId, setSelectedHabitId] = useState<number | null>(1);
+  const [selectedHabitDayKey, setSelectedHabitDayKey] = useState<string | null>(null);
   const [habits, setHabits] = useState<Habit[]>(initialHabits);
   const [newHabitName, setNewHabitName] = useState("");
   const [editingHabitId, setEditingHabitId] = useState<number | null>(null);
@@ -1636,6 +1644,7 @@ useEffect(() => {
 
     if (selectedHabitId === id) {
       setSelectedHabitId(remaining.length > 0 ? remaining[0].id : null);
+      setSelectedHabitDayKey(null);
     }
   };
 
@@ -2139,16 +2148,24 @@ const overallWeeklyPercent =
     : 0; 
   const toggleDayStatus = (dateKey: string, isFuture: boolean) => {
     if (isFuture || !selectedHabitId) return;
-
+    setSelectedHabitDayKey(dateKey);
     setHabits((prev) =>
       prev.map((h) => {
         if (h.id !== selectedHabitId) return h;
-
         const current = h.days[dateKey] || "none";
         const next =
           current === "none" ? "done" : current === "done" ? "missed" : "none";
-
         return { ...h, days: { ...h.days, [dateKey]: next } };
+      })
+    );
+  };
+
+  const setHabitNote = (dateKey: string, note: string) => {
+    if (!selectedHabitId) return;
+    setHabits((prev) =>
+      prev.map((h) => {
+        if (h.id !== selectedHabitId) return h;
+        return { ...h, notes: { ...(h.notes ?? {}), [dateKey]: note } };
       })
     );
   };
@@ -2293,7 +2310,7 @@ const overallWeeklyPercent =
                     {habits.map((h) => (
                       <div key={h.id} className="relative group">
                         <button
-                          onClick={() => setSelectedHabitId(h.id)}
+                          onClick={() => { setSelectedHabitId(h.id); setSelectedHabitDayKey(null); }}
                           className={`w-full p-5 rounded-3xl border transition-all text-right ${
                             selectedHabitId === h.id
                               ? "bg-zinc-100 border-white text-zinc-950 shadow-2xl shadow-white/10 scale-[1.02]"
@@ -2437,7 +2454,7 @@ const overallWeeklyPercent =
                               onClick={() => toggleDayStatus(day.key, day.isFuture)}
                               disabled={day.isFuture || !selectedHabit}
                               type="button"
-                              className={`aspect-square rounded-2xl border flex items-center justify-center text-sm font-bold transition-all relative group
+                              className={`aspect-square rounded-2xl border flex flex-col items-center justify-center text-sm font-bold transition-all relative group
                                 ${
                                   day.isFuture
                                     ? "bg-transparent border-zinc-900 text-zinc-800 cursor-not-allowed"
@@ -2448,13 +2465,50 @@ const overallWeeklyPercent =
                                     : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:bg-zinc-800"
                                 }
                                 ${day.isToday ? "ring-2 ring-blue-500 ring-offset-4 ring-offset-[#0c0c0c]" : ""}
+                                ${selectedHabitDayKey === day.key ? "ring-2 ring-white/40 ring-offset-2 ring-offset-[#0c0c0c]" : ""}
                               `}
                             >
                               {day.dayNumber}
+                              {!day.isFuture && selectedHabit?.notes?.[day.key] && (
+                                <span className="absolute bottom-1 w-1 h-1 rounded-full bg-white/60" />
+                              )}
                             </button>
                           );
                         })}
                       </div>
+
+                      {/* Day note panel */}
+                      {selectedHabitDayKey && selectedHabit && (
+                        <div className="mt-5 p-4 bg-zinc-900 border border-zinc-800 rounded-2xl">
+                          <div className="flex items-center justify-between mb-2.5" dir="rtl">
+                            <div className="flex items-center gap-2 text-xs font-bold text-zinc-400">
+                              <span>
+                                {new Date(selectedHabitDayKey + "T00:00:00").toLocaleDateString("he-IL", { day: "numeric", month: "long", year: "numeric" })}
+                              </span>
+                              {selectedHabit.days[selectedHabitDayKey] === "done" && (
+                                <span className="text-emerald-400">· בוצע ✓</span>
+                              )}
+                              {selectedHabit.days[selectedHabitDayKey] === "missed" && (
+                                <span className="text-red-400">· פוספס ✗</span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => setSelectedHabitDayKey(null)}
+                              className="text-zinc-600 hover:text-zinc-300 transition-colors"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                          <textarea
+                            value={selectedHabit.notes?.[selectedHabitDayKey] ?? ""}
+                            onChange={(e) => setHabitNote(selectedHabitDayKey, e.target.value)}
+                            placeholder="מה הסיבה? למה ירוק / אדום? כתוב כאן..."
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600 resize-none transition-colors"
+                            rows={2}
+                            dir="rtl"
+                          />
+                        </div>
+                      )}
 
                       <div className="mt-10 flex gap-8 border-t border-zinc-800/50 pt-8">
                         <div className="flex items-center gap-2">
@@ -3529,6 +3583,7 @@ const overallWeeklyPercent =
                           wStart,
                           wEnd
                         );
+                        const totalSec = sumAllSecondsForCourse(universityStudy.entries, course.id);
                         const dailyAvgWeekSec = weekSec / 7;
                         const monthDayCells = uniStudyMonthDays.filter(
                           (d): d is NonNullable<(typeof uniStudyMonthDays)[number]> => d !== null
@@ -3560,6 +3615,17 @@ const overallWeeklyPercent =
                                   </p>
                                   <p className="text-2xl font-black text-white">
                                     {formatStudyDuration(weekSec)}
+                                  </p>
+                                </div>
+                                <div className="flex-1 min-w-[200px] rounded-2xl border border-violet-500/20 bg-violet-500/5 p-5">
+                                  <p className="text-xs font-bold text-violet-400/80 uppercase tracking-wider mb-1">
+                                    סה״כ בכלל
+                                  </p>
+                                  <p className="text-2xl font-black text-white">
+                                    {formatStudyDuration(totalSec)}
+                                  </p>
+                                  <p className="text-xs text-zinc-500 mt-2">
+                                    כלל שעות הלימוד בקורס מאז ומעולם
                                   </p>
                                 </div>
                               </div>
